@@ -7,7 +7,6 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import {Picker} from '@react-native-picker/picker';
 import ApiService from '../services/ApiService';
 
 const CategorySelector = ({selectedCategory, onCategoryChange}) => {
