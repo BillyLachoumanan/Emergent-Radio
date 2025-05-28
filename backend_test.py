@@ -90,6 +90,50 @@ class RadioAPITester:
             
         print(f"✅ Response structure valid - {len(countries)} countries returned")
         return True
+        
+    def validate_genres_response(self, response):
+        """Validate the structure of genres response"""
+        if not response or 'genres' not in response:
+            print("❌ Invalid response structure: 'genres' field missing")
+            return False
+            
+        genres = response['genres']
+        if not isinstance(genres, list):
+            print("❌ Invalid 'genres' field: expected a list")
+            return False
+            
+        if len(genres) == 0:
+            print("⚠️ Warning: No genres returned")
+            return True
+            
+        # Check first genre for required fields
+        first_genre = genres[0]
+        required_fields = ['name', 'slug', 'icon']
+        missing_fields = [field for field in required_fields if field not in first_genre]
+        
+        if missing_fields:
+            print(f"❌ Genre missing required fields: {', '.join(missing_fields)}")
+            return False
+            
+        print(f"✅ Response structure valid - {len(genres)} genres returned")
+        return True
+        
+    def validate_station_details_response(self, response):
+        """Validate the structure of station details response"""
+        if not response or 'station' not in response:
+            print("❌ Invalid response structure: 'station' field missing")
+            return False
+            
+        station = response['station']
+        required_fields = ['stationuuid', 'name', 'url', 'country', 'countrycode', 'homepage', 'favicon', 'tags']
+        missing_fields = [field for field in required_fields if field not in station]
+        
+        if missing_fields:
+            print(f"❌ Station details missing required fields: {', '.join(missing_fields)}")
+            return False
+            
+        print(f"✅ Station details response structure valid")
+        return True
 
     def test_popular_stations(self):
         """Test the popular stations endpoint"""
@@ -156,6 +200,59 @@ class RadioAPITester:
         if success and 'success' in response:
             return response['success']
         return False
+        
+    def test_christian_stations(self):
+        """Test the Christian stations endpoint"""
+        success, response = self.run_test(
+            "Christian Radio Stations",
+            "GET",
+            "api/stations/christian",
+            200
+        )
+        
+        if success:
+            return self.validate_stations_response(response)
+        return False
+        
+    def test_genres(self):
+        """Test the genres endpoint"""
+        success, response = self.run_test(
+            "Genres List",
+            "GET",
+            "api/genres",
+            200
+        )
+        
+        if success:
+            return self.validate_genres_response(response)
+        return False
+        
+    def test_stations_by_genre(self, genre="rock"):
+        """Test the stations by genre endpoint"""
+        success, response = self.run_test(
+            f"Stations by Genre ({genre})",
+            "GET",
+            f"api/stations/by-genre",
+            200,
+            params={"genre": genre}
+        )
+        
+        if success:
+            return self.validate_stations_response(response)
+        return False
+        
+    def test_station_details(self, station_uuid):
+        """Test the station details endpoint"""
+        success, response = self.run_test(
+            "Station Details",
+            "GET",
+            f"api/station/{station_uuid}",
+            200
+        )
+        
+        if success:
+            return self.validate_station_details_response(response)
+        return False
 
 def main():
     # Setup
@@ -164,20 +261,14 @@ def main():
     # Run tests
     print("\n===== GLOBAL RADIO API TESTS =====\n")
     
-    # Test 1: Popular Stations
+    # Basic API Tests
     popular_test = tester.test_popular_stations()
-    
-    # Test 2: Countries List
     countries_test = tester.test_countries()
-    
-    # Test 3: Stations by Country
     country_test = tester.test_stations_by_country("US")
-    
-    # Test 4: Search Stations
     search_test = tester.test_search_stations("BBC")
     
-    # Test 5: Station Click (only if we have a station UUID from previous tests)
-    click_test = False
+    # Get a station UUID for further tests
+    station_uuid = None
     if popular_test:
         success, response = tester.run_test(
             "Get Popular Stations for UUID",
@@ -187,7 +278,21 @@ def main():
         )
         if success and 'stations' in response and len(response['stations']) > 0:
             station_uuid = response['stations'][0]['stationuuid']
-            click_test = tester.test_click_station(station_uuid)
+    
+    # Station interaction tests
+    click_test = False
+    if station_uuid:
+        click_test = tester.test_click_station(station_uuid)
+    
+    # New feature tests
+    christian_test = tester.test_christian_stations()
+    genres_test = tester.test_genres()
+    genre_stations_test = tester.test_stations_by_genre("rock")
+    
+    # Station details test
+    station_details_test = False
+    if station_uuid:
+        station_details_test = tester.test_station_details(station_uuid)
     
     # Print results
     print(f"\n===== TEST RESULTS =====")
@@ -196,11 +301,26 @@ def main():
     print(f"Stations by Country API: {'✅ PASS' if country_test else '❌ FAIL'}")
     print(f"Search Stations API: {'✅ PASS' if search_test else '❌ FAIL'}")
     print(f"Station Click API: {'✅ PASS' if click_test else '❌ FAIL'}")
+    print(f"Christian Stations API: {'✅ PASS' if christian_test else '❌ FAIL'}")
+    print(f"Genres List API: {'✅ PASS' if genres_test else '❌ FAIL'}")
+    print(f"Stations by Genre API: {'✅ PASS' if genre_stations_test else '❌ FAIL'}")
+    print(f"Station Details API: {'✅ PASS' if station_details_test else '❌ FAIL'}")
     
-    tests_passed = sum([popular_test, countries_test, country_test, search_test, click_test])
-    print(f"\n📊 Tests passed: {tests_passed}/5")
+    tests_passed = sum([
+        popular_test, 
+        countries_test, 
+        country_test, 
+        search_test, 
+        click_test,
+        christian_test,
+        genres_test,
+        genre_stations_test,
+        station_details_test
+    ])
+    total_tests = 9
+    print(f"\n📊 Tests passed: {tests_passed}/{total_tests}")
     
-    return 0 if tests_passed == 5 else 1
+    return 0 if tests_passed == total_tests else 1
 
 if __name__ == "__main__":
     sys.exit(main())
