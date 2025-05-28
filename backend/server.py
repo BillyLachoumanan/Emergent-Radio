@@ -48,15 +48,12 @@ async def get_radio_browser_servers():
     """Get list of radio browser API servers for load balancing"""
     global radio_browser_servers
     if not radio_browser_servers:
-        try:
-            import socket
-            result = socket.getaddrinfo('all.api.radio-browser.info', None)
-            servers = list(set([ip[4][0] for ip in result]))
-            radio_browser_servers = [f"https://{server}" for server in servers]
-            random.shuffle(radio_browser_servers)
-        except Exception as e:
-            # Fallback to default server
-            radio_browser_servers = ["https://de1.api.radio-browser.info"]
+        # Use known working servers
+        radio_browser_servers = [
+            "https://de1.api.radio-browser.info",
+            "https://nl1.api.radio-browser.info", 
+            "https://at1.api.radio-browser.info"
+        ]
     return radio_browser_servers
 
 async def make_radio_request(endpoint: str, params: dict = None):
