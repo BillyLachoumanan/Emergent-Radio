@@ -63,16 +63,24 @@ async def make_radio_request(endpoint: str, params: dict = None):
     """Make request to radio browser API with server failover"""
     servers = await get_radio_browser_servers()
     
+    last_error = None
     for server in servers:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{server}/json/{endpoint}", params=params)
+                url = f"{server}/json/{endpoint}"
+                print(f"Trying URL: {url} with params: {params}")
+                response = await client.get(url, params=params)
+                print(f"Response status: {response.status_code}")
                 if response.status_code == 200:
                     return response.json()
+                else:
+                    print(f"Bad status from {server}: {response.status_code}")
         except Exception as e:
+            print(f"Error with server {server}: {e}")
+            last_error = e
             continue
     
-    raise HTTPException(status_code=503, detail="Radio service temporarily unavailable")
+    raise HTTPException(status_code=503, detail=f"Radio service temporarily unavailable. Last error: {last_error}")
 
 @app.get("/")
 async def root():
