@@ -109,6 +109,59 @@ async def get_stations_by_country(country_code: str, limit: int = 100):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/stations/by-tag/{tag}")
+async def get_stations_by_tag(tag: str, limit: int = 100):
+    """Get radio stations by tag/genre"""
+    try:
+        params = {
+            "tag": tag.lower(),
+            "limit": limit,
+            "order": "clickcount",
+            "reverse": "true",
+            "hidebroken": "true"
+        }
+        stations = await make_radio_request("stations/search", params)
+        return {"stations": stations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/stations/christian")
+async def get_christian_stations(limit: int = 100):
+    """Get Christian radio stations"""
+    try:
+        # Search for Christian, Gospel, and Religious stations
+        christian_tags = ["christian", "gospel", "religious", "christian music", "christian rock", "christian pop"]
+        all_stations = []
+        
+        for tag in christian_tags:
+            params = {
+                "tag": tag,
+                "limit": 50,
+                "order": "clickcount",
+                "reverse": "true",
+                "hidebroken": "true"
+            }
+            try:
+                stations = await make_radio_request("stations/search", params)
+                all_stations.extend(stations)
+            except:
+                continue
+        
+        # Remove duplicates and sort by click count
+        seen = set()
+        unique_stations = []
+        for station in all_stations:
+            if station['stationuuid'] not in seen:
+                seen.add(station['stationuuid'])
+                unique_stations.append(station)
+        
+        # Sort by clickcount descending
+        unique_stations.sort(key=lambda x: x.get('clickcount', 0), reverse=True)
+        
+        return {"stations": unique_stations[:limit]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/stations/search")
 async def search_stations(
     name: Optional[str] = None,
@@ -135,6 +188,51 @@ async def search_stations(
         if tag:
             params["tag"] = tag
             
+        stations = await make_radio_request("stations/search", params)
+        return {"stations": stations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/stations/by-genre")
+async def get_stations_by_genre(genre: str, limit: int = 50):
+    """Get stations by specific genre"""
+    try:
+        # Map common genres to tags
+        genre_mapping = {
+            "rock": "rock",
+            "pop": "pop",
+            "jazz": "jazz",
+            "classical": "classical",
+            "country": "country",
+            "hip-hop": "hip hop,hiphop,rap",
+            "electronic": "electronic,dance,techno,house",
+            "blues": "blues",
+            "reggae": "reggae",
+            "folk": "folk",
+            "metal": "metal",
+            "punk": "punk",
+            "alternative": "alternative",
+            "indie": "indie",
+            "soul": "soul,r&b",
+            "funk": "funk",
+            "latin": "latin,salsa,merengue",
+            "world": "world music,ethnic",
+            "ambient": "ambient,chillout",
+            "news": "news,talk",
+            "sports": "sports",
+            "christian": "christian,gospel,religious"
+        }
+        
+        tag = genre_mapping.get(genre.lower(), genre)
+        
+        params = {
+            "tag": tag,
+            "limit": limit,
+            "order": "clickcount",
+            "reverse": "true",
+            "hidebroken": "true"
+        }
+        
         stations = await make_radio_request("stations/search", params)
         return {"stations": stations}
     except Exception as e:
@@ -168,6 +266,46 @@ async def get_tags(limit: int = 100):
         tags = await make_radio_request("tags")
         sorted_tags = sorted(tags, key=lambda x: x.get('stationcount', 0), reverse=True)
         return {"tags": sorted_tags[:limit]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/genres")
+async def get_popular_genres():
+    """Get curated list of popular music genres"""
+    genres = [
+        {"name": "Rock", "slug": "rock", "icon": "🎸"},
+        {"name": "Pop", "slug": "pop", "icon": "🎵"},
+        {"name": "Jazz", "slug": "jazz", "icon": "🎺"},
+        {"name": "Classical", "slug": "classical", "icon": "🎼"},
+        {"name": "Country", "slug": "country", "icon": "🤠"},
+        {"name": "Hip-Hop", "slug": "hip-hop", "icon": "🎤"},
+        {"name": "Electronic", "slug": "electronic", "icon": "🎧"},
+        {"name": "Blues", "slug": "blues", "icon": "🎷"},
+        {"name": "Reggae", "slug": "reggae", "icon": "🌴"},
+        {"name": "Folk", "slug": "folk", "icon": "🪕"},
+        {"name": "Metal", "slug": "metal", "icon": "⚡"},
+        {"name": "Punk", "slug": "punk", "icon": "🤘"},
+        {"name": "Alternative", "slug": "alternative", "icon": "🎭"},
+        {"name": "Indie", "slug": "indie", "icon": "🎨"},
+        {"name": "Soul/R&B", "slug": "soul", "icon": "💫"},
+        {"name": "Latin", "slug": "latin", "icon": "💃"},
+        {"name": "World", "slug": "world", "icon": "🌍"},
+        {"name": "Ambient", "slug": "ambient", "icon": "🌙"},
+        {"name": "Christian", "slug": "christian", "icon": "✝️"},
+        {"name": "News/Talk", "slug": "news", "icon": "📰"},
+        {"name": "Sports", "slug": "sports", "icon": "⚽"}
+    ]
+    return {"genres": genres}
+
+@app.get("/api/station/{station_uuid}")
+async def get_station_details(station_uuid: str):
+    """Get detailed information about a specific station"""
+    try:
+        stations = await make_radio_request("stations/byuuid", {"uuid": station_uuid})
+        if stations and len(stations) > 0:
+            return {"station": stations[0]}
+        else:
+            raise HTTPException(status_code=404, detail="Station not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
