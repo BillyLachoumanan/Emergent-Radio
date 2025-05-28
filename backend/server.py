@@ -1,75 +1,185 @@
-from fastapi import FastAPI, APIRouter
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+import requests
+import random
 import os
-import logging
-from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List
-import uuid
-from datetime import datetime
+from typing import List, Dict, Any, Optional
+import asyncio
+import httpx
+from pydantic import BaseModel
 
+app = FastAPI(title="Global Radio API")
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-# Create the main app without a prefix
-app = FastAPI()
-
-# Create a router with the /api prefix
-api_router = APIRouter(prefix="/api")
-
-
-# Define Models
-class StatusCheck(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-class StatusCheckCreate(BaseModel):
-    client_name: str
-
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
-
-# Include the router in the main app
-app.include_router(api_router)
-
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+class RadioStation(BaseModel):
+    stationuuid: str
+    name: str
+    url: str
+    url_resolved: str
+    homepage: str
+    favicon: str
+    country: str
+    countrycode: str
+    state: str
+    language: str
+    votes: int
+    lastchangetime: str
+    codec: str
+    bitrate: int
+    hls: int
+    lastcheckok: int
+    lastchecktime: str
+    clickcount: int
+    clicktrend: int
+    tags: str
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Cache for radio browser servers
+radio_browser_servers = []
+
+async def get_radio_browser_servers():
+    """Get list of radio browser API servers for load balancing"""
+    global radio_browser_servers
+    if not radio_browser_servers:
+        try:
+            import socket
+            result = socket.getaddrinfo('all.api.radio-browser.info', None)
+            servers = list(set([ip[4][0] for ip in result]))
+            radio_browser_servers = [f"https://{server}" for server in servers]
+            random.shuffle(radio_browser_servers)
+        except Exception as e:
+            # Fallback to default server
+            radio_browser_servers = ["https://de1.api.radio-browser.info"]
+    return radio_browser_servers
+
+async def make_radio_request(endpoint: str, params: dict = None):
+    """Make request to radio browser API with server failover"""
+    servers = await get_radio_browser_servers()
+    
+    for server in servers:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(f"{server}/json/{endpoint}", params=params)
+                if response.status_code == 200:
+                    return response.json()
+        except Exception as e:
+            continue
+    
+    raise HTTPException(status_code=503, detail="Radio service temporarily unavailable")
+
+@app.get("/")
+async def root():
+    return {"message": "Global Radio API is running"}
+
+@app.get("/api/stations/popular")
+async def get_popular_stations(limit: int = 50):
+    """Get most popular radio stations"""
+    try:
+        params = {
+            "limit": limit,
+            "order": "clickcount",
+            "reverse": "true",
+            "hidebroken": "true"
+        }
+        stations = await make_radio_request("stations/search", params)
+        return {"stations": stations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/stations/by-country/{country_code}")
+async def get_stations_by_country(country_code: str, limit: int = 100):
+    """Get radio stations by country code"""
+    try:
+        params = {
+            "countrycode": country_code.upper(),
+            "limit": limit,
+            "order": "clickcount",
+            "reverse": "true",
+            "hidebroken": "true"
+        }
+        stations = await make_radio_request("stations/search", params)
+        return {"stations": stations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/stations/search")
+async def search_stations(
+    name: Optional[str] = None,
+    country: Optional[str] = None,
+    language: Optional[str] = None,
+    tag: Optional[str] = None,
+    limit: int = 50
+):
+    """Search radio stations with various filters"""
+    try:
+        params = {
+            "limit": limit,
+            "order": "clickcount",
+            "reverse": "true",
+            "hidebroken": "true"
+        }
+        
+        if name:
+            params["name"] = name
+        if country:
+            params["country"] = country
+        if language:
+            params["language"] = language
+        if tag:
+            params["tag"] = tag
+            
+        stations = await make_radio_request("stations/search", params)
+        return {"stations": stations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/countries")
+async def get_countries():
+    """Get list of countries with radio stations"""
+    try:
+        countries = await make_radio_request("countries")
+        # Sort by station count
+        sorted_countries = sorted(countries, key=lambda x: x.get('stationcount', 0), reverse=True)
+        return {"countries": sorted_countries}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/languages")
+async def get_languages():
+    """Get list of languages"""
+    try:
+        languages = await make_radio_request("languages")
+        sorted_languages = sorted(languages, key=lambda x: x.get('stationcount', 0), reverse=True)
+        return {"languages": sorted_languages}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tags")
+async def get_tags(limit: int = 100):
+    """Get popular tags/genres"""
+    try:
+        tags = await make_radio_request("tags")
+        sorted_tags = sorted(tags, key=lambda x: x.get('stationcount', 0), reverse=True)
+        return {"tags": sorted_tags[:limit]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/station/{station_uuid}/click")
+async def click_station(station_uuid: str):
+    """Register a click for a station (for statistics)"""
+    try:
+        await make_radio_request(f"url/{station_uuid}")
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)
