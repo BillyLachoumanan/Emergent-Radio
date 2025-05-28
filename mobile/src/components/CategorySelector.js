@@ -105,52 +105,43 @@ const CategorySelector = ({selectedCategory, onCategoryChange}) => {
             ✝️ Christian
           </Text>
         </TouchableOpacity>
+
+        {/* Genre Buttons */}
+        {genres.slice(0, 8).map((genre) => (
+          <TouchableOpacity
+            key={genre.slug}
+            style={[
+              styles.categoryButton,
+              selectedCategory === 'genre' && styles.categoryButtonActive
+            ]}
+            onPress={() => handleGenreChange(genre.slug)}>
+            <Text style={[
+              styles.categoryButtonText,
+              selectedCategory === 'genre' && styles.categoryButtonTextActive
+            ]}>
+              {genre.icon} {genre.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+
+        {/* Country Buttons - Top countries */}
+        {countries.slice(0, 8).map((country) => (
+          <TouchableOpacity
+            key={country.iso_3166_1}
+            style={[
+              styles.categoryButton,
+              selectedCategory === 'country' && styles.categoryButtonActive
+            ]}
+            onPress={() => handleCountryChange(country.iso_3166_1)}>
+            <Text style={[
+              styles.categoryButtonText,
+              selectedCategory === 'country' && styles.categoryButtonTextActive
+            ]}>
+              {getCountryFlag(country.iso_3166_1)} {country.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
-
-      {/* Dropdowns */}
-      <View style={styles.dropdowns}>
-        {/* Country Selector */}
-        <View style={styles.pickerContainer}>
-          <Text style={styles.pickerLabel}>Country:</Text>
-          <View style={styles.pickerWrapper}>
-            <Picker
-              selectedValue={selectedCountry}
-              onValueChange={handleCountryChange}
-              style={styles.picker}
-              mode="dropdown">
-              <Picker.Item label="🌍 All Countries" value="" />
-              {countries.map((country) => (
-                <Picker.Item
-                  key={country.iso_3166_1}
-                  label={`${getCountryFlag(country.iso_3166_1)} ${country.name} (${country.stationcount})`}
-                  value={country.iso_3166_1}
-                />
-              ))}
-            </Picker>
-          </View>
-        </View>
-
-        {/* Genre Selector */}
-        <View style={styles.pickerContainer}>
-          <Text style={styles.pickerLabel}>Genre:</Text>
-          <View style={styles.pickerWrapper}>
-            <Picker
-              selectedValue={selectedGenre}
-              onValueChange={handleGenreChange}
-              style={styles.picker}
-              mode="dropdown">
-              <Picker.Item label="🎵 All Genres" value="" />
-              {genres.map((genre) => (
-                <Picker.Item
-                  key={genre.slug}
-                  label={`${genre.icon} ${genre.name}`}
-                  value={genre.slug}
-                />
-              ))}
-            </Picker>
-          </View>
-        </View>
-      </View>
     </View>
   );
 };
