@@ -177,30 +177,6 @@ const styles = StyleSheet.create({
   categoryButtonTextActive: {
     fontWeight: '600',
   },
-  dropdowns: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  pickerContainer: {
-    flex: 1,
-  },
-  pickerLabel: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  pickerWrapper: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    overflow: 'hidden',
-  },
-  picker: {
-    color: '#ffffff',
-    height: 44,
-  },
 });
 
 export default CategorySelector;
